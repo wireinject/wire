@@ -1133,13 +1133,18 @@ func findInjectorBuild(info *types.Info, fn *ast.FuncDecl) (*ast.CallExpr, error
 	return wireBuildCall, nil
 }
 
+var wireImportPaths = map[string]bool{
+	"github.com/google/wire":     true,
+	"github.com/wireinject/wire": true,
+}
+
 func isWireImport(path string) bool {
 	// TODO(light): This is depending on details of the current loader.
 	const vendorPart = "vendor/"
 	if i := strings.LastIndex(path, vendorPart); i != -1 && (i == 0 || path[i-1] == '/') {
 		path = path[i+len(vendorPart):]
 	}
-	return path == "github.com/google/wire"
+	return wireImportPaths[path]
 }
 
 func isProviderSetType(t types.Type) bool {

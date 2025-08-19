@@ -27,6 +27,12 @@ Install Wire by running:
 go install github.com/google/wire/cmd/wire@latest
 ```
 
+Go 1.25.0 or higher
+```shell
+go install github.com/wireinject/wire/cmd/wire@latest
+```
+
+
 and ensuring that `$GOPATH/bin` is added to your `$PATH`.
 
 ## Documentation

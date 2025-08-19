@@ -1,4 +1,4 @@
-module github.com/google/wire
+module github.com/wireinject/wire
 
 go 1.23.0
 

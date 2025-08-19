@@ -517,6 +517,7 @@ func loadTestCase(root string, wireGoSrc []byte) (*testCase, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load test case %s: %v", name, err)
 	}
+	wantWireOutput = []byte(strings.Replace(string(wantWireOutput), "//go:generate go run -mod=mod github.com/google/wire/cmd/wire", "//go:generate go run -mod=mod github.com/wireinject/wire/cmd/wire", 1))
 	return &testCase{
 		name:                 name,
 		pkg:                  string(bytes.TrimSpace(pkg)),
