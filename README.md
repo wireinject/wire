@@ -4,9 +4,9 @@
 [![godoc](https://godoc.org/github.com/google/wire?status.svg)][godoc]
 
 > [!WARNING]
-> This project is no longer maintained.
+> This origin project is no longer maintained.
 >
-> If you wish to update or extend wire, please do so in a fork.
+> This is a version maintained by wireinject/wire.
 
 Wire is a code generation tool that automates connecting components using
 [dependency injection][]. Dependencies between components are represented in
@@ -27,7 +27,7 @@ For an overview, see the [introductory blog post][].
 Install Wire by running:
 
 ```shell
-go install github.com/google/wire/cmd/wire@latest
+go install github.com/wireinject/wire/cmd/wire@latest
 ```
 
 and ensuring that `$GOPATH/bin` is added to your `$PATH`.
