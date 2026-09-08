@@ -1244,9 +1244,11 @@ func (pt ProvidedType) Field() *Field {
 // bindShouldUsePointer loads the wire package the user is importing from their
 // injector. The call is a wire marker function call.
 func bindShouldUsePointer(info *types.Info, call *ast.CallExpr) bool {
-	// These type assertions should not fail, otherwise panic.
-	fun := call.Fun.(*ast.SelectorExpr)                 // wire.Bind
-	pkgName := fun.X.(*ast.Ident)                       // wire
-	wireName := info.ObjectOf(pkgName).(*types.PkgName) // wire package
-	return wireName.Imported().Scope().Lookup("bindToUsePointer") != nil
+	// Resolve the wire.Bind function object; this works for qualified and
+	// dot-imported calls.
+	fn, ok := qualifiedIdentObject(info, call.Fun).(*types.Func)
+	if !ok || fn.Pkg() == nil {
+		return true
+	}
+	return fn.Pkg().Scope().Lookup("bindToUsePointer") != nil
 }
