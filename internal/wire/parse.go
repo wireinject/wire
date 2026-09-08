@@ -977,7 +977,7 @@ func allFields(call *ast.CallExpr) bool {
 	if !ok {
 		return false
 	}
-	return strings.EqualFold(strconv.Quote("*"), b.Value)
+	return b.Value == strconv.Quote("*")
 }
 
 // isPrevented checks whether field i is prevented by tag "-".
@@ -1175,7 +1175,7 @@ func checkField(f ast.Expr, st *types.Struct) (*types.Var, error) {
 		return nil, fmt.Errorf("%v must be a string with the field name", f)
 	}
 	for i := 0; i < st.NumFields(); i++ {
-		if strings.EqualFold(strconv.Quote(st.Field(i).Name()), b.Value) {
+		if b.Value == strconv.Quote(st.Field(i).Name()) {
 			if isPrevented(st.Tag(i)) {
 				return nil, fmt.Errorf("%s is prevented from injecting by wire", b.Value)
 			}
