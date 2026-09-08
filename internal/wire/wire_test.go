@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"unicode"
@@ -167,7 +168,12 @@ func TestWire(t *testing.T) {
 
 func goBuildCheck(goToolPath, gopath string, test *testCase) error {
 	// Run `go build`.
+	// `go build -o` uses the output path verbatim and does not append the
+	// executable suffix, so add it ourselves on Windows.
 	testExePath := filepath.Join(gopath, "bin", "testprog")
+	if runtime.GOOS == "windows" {
+		testExePath += ".exe"
+	}
 	buildCmd := []string{"build", "-o", testExePath}
 	buildCmd = append(buildCmd, test.pkg)
 	cmd := exec.Command(goToolPath, buildCmd...)
