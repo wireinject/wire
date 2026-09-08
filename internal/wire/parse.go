@@ -465,6 +465,9 @@ func newObjectCache(pkgs []*packages.Package) *objectCache {
 // get converts a Go object into a Wire structure. It may return a *Provider, an
 // *IfaceBinding, a *ProviderSet, a *Value, or a []*Field.
 func (oc *objectCache) get(obj types.Object) (val interface{}, errs []error) {
+	if obj.Pkg() == nil {
+		return nil, []error{fmt.Errorf("%v is not a provider or a provider set", obj)}
+	}
 	ref := objRef{
 		importPath: obj.Pkg().Path(),
 		name:       obj.Name(),
@@ -489,6 +492,11 @@ func (oc *objectCache) get(obj types.Object) (val interface{}, errs []error) {
 			if spec.Names[i].Name == obj.Name() {
 				break
 			}
+		}
+		if i >= len(spec.Values) {
+			// A multi-valued declaration such as `var A, B = f()` cannot be
+			// mapped to a single expression per name.
+			return nil, []error{notePosition(oc.fset.Position(obj.Pos()), fmt.Errorf("%v is not a provider or a provider set", obj))}
 		}
 		pkgPath := obj.Pkg().Path()
 		return oc.processExpr(oc.packages[pkgPath].TypesInfo, pkgPath, spec.Values[i], obj.Name())

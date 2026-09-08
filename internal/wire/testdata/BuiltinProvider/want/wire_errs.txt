@@ -1,0 +1,1 @@
+example.com/foo/foo.go:x:y: nil is not a provider or a provider set
