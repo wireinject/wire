@@ -1,0 +1,1 @@
+injectors must be functions, not methods

@@ -1135,6 +1135,9 @@ func findInjectorBuild(info *types.Info, fn *ast.FuncDecl) (*ast.CallExpr, error
 	if wireBuildCall == nil {
 		return nil, nil
 	}
+	if fn.Recv != nil {
+		return nil, errors.New("injectors must be functions, not methods")
+	}
 	if invalid {
 		return nil, errors.New("a call to wire.Build indicates that this function is an injector, but injectors must consist of only the wire.Build call and an optional return")
 	}
