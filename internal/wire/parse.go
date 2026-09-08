@@ -1031,7 +1031,7 @@ func processFieldsOf(fset *token.FileSet, info *types.Info, call *ast.CallExpr) 
 		struc, ok = t.Elem().Underlying().(*types.Struct)
 		if !ok {
 			return nil, notePosition(fset.Position(call.Pos()),
-				fmt.Errorf(firstArgReqFormat, types.TypeString(struc, nil)))
+				fmt.Errorf(firstArgReqFormat, types.TypeString(t, nil)))
 		}
 		isPtrToStruct = true
 	case *types.Struct:

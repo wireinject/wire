@@ -1,0 +1,1 @@
+example.com/foo/foo.go:x:y: first argument to FieldsOf must be a pointer to a struct or a pointer to a pointer to a struct; found *int
