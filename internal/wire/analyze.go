@@ -304,15 +304,33 @@ func verifyArgsUsed(set *ProviderSet, used []*providerSetSrc) []error {
 			errs = append(errs, fmt.Errorf("unused value of type %s", types.TypeString(v.Out, nil)))
 		}
 	}
-	for _, b := range set.Bindings {
-		found := false
-		for _, u := range used {
-			if u.Binding == b {
-				found = true
-				break
+	// Bindings may form a chain (e.g. I2 -> I1 -> *C). Because the provider
+	// map collapses such chains to the concrete type, only the outermost
+	// binding is recorded in used. Mark any binding whose interface is the
+	// provided type of an already-used binding as used, transitively.
+	usedBindings := make(map[*IfaceBinding]bool)
+	for _, u := range used {
+		if u.Binding != nil {
+			usedBindings[u.Binding] = true
+		}
+	}
+	for changed := true; changed; {
+		changed = false
+		for _, b := range set.Bindings {
+			if usedBindings[b] {
+				continue
+			}
+			for usedB := range usedBindings {
+				if types.Identical(b.Iface, usedB.Provided) {
+					usedBindings[b] = true
+					changed = true
+					break
+				}
 			}
 		}
-		if !found {
+	}
+	for _, b := range set.Bindings {
+		if !usedBindings[b] {
 			errs = append(errs, fmt.Errorf("unused interface binding to type %s", types.TypeString(b.Iface, nil)))
 		}
 	}
