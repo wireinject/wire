@@ -450,12 +450,8 @@ func (g *gen) rewritePkgRefs(info *types.Info, node ast.Node) ast.Node {
 		}
 		return false
 	}
-	var scopeStack []*types.Scope
 	pkgScope := g.pkg.Types.Scope()
 	node = astutil.Apply(node, func(c *astutil.Cursor) bool {
-		if scope := info.Scopes[c.Node()]; scope != nil {
-			scopeStack = append(scopeStack, scope)
-		}
 		id, ok := c.Node().(*ast.Ident)
 		if !ok {
 			return true
@@ -482,15 +478,18 @@ func (g *gen) rewritePkgRefs(info *types.Info, node ast.Node) ast.Node {
 		if pos := obj.Pos(); pos < start || end <= pos || !(g.nameInFileScope(objName) || inNewNames(objName)) {
 			return true
 		}
+		// The copied AST has fresh node pointers, so info.Scopes cannot be
+		// consulted for it. Use the object's own scope instead: it is the
+		// correct domain for names visible at the declaration site.
+		objScope := obj.Parent()
 		newName := disambiguate(objName, func(n string) bool {
 			if g.nameInFileScope(n) || inNewNames(n) {
 				return true
 			}
-			if len(scopeStack) > 0 {
-				// Avoid picking a name that conflicts with other names in the
-				// current scope.
-				_, obj := scopeStack[len(scopeStack)-1].LookupParent(n, token.NoPos)
-				if obj != nil {
+			if objScope != nil {
+				// Avoid picking a name that conflicts with other names
+				// visible from the declaration's scope.
+				if _, other := objScope.LookupParent(n, obj.Pos()); other != nil {
 					return true
 				}
 			}
@@ -499,13 +498,7 @@ func (g *gen) rewritePkgRefs(info *types.Info, node ast.Node) ast.Node {
 		newNames[obj] = newName
 		c.Replace(ast.NewIdent(newName))
 		return false
-	}, func(c *astutil.Cursor) bool {
-		if info.Scopes[c.Node()] != nil {
-			// Should be top of stack; pop it.
-			scopeStack = scopeStack[:len(scopeStack)-1]
-		}
-		return true
-	})
+	}, nil)
 	return node
 }
 
