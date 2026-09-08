@@ -177,6 +177,11 @@ type Provider struct {
 	// HasErr reports whether the provider function can return an error.
 	// (Always false for structs.)
 	HasErr bool
+
+	// InstanceArgs holds the concrete type arguments when this provider is a
+	// generic function or struct instantiated with explicit type arguments.
+	// It is nil for non-generic providers.
+	InstanceArgs []types.Type
 }
 
 // ProviderInput describes an incoming edge in the provider graph.
@@ -532,6 +537,22 @@ func (oc *objectCache) varDecl(obj *types.Var) *ast.ValueSpec {
 func (oc *objectCache) processExpr(info *types.Info, pkgPath string, expr ast.Expr, varName string) (interface{}, []error) {
 	exprPos := oc.fset.Position(expr.Pos())
 	expr = astutil.Unparen(expr)
+	if inst, obj, ok := instanceInfo(info, expr); ok {
+		if fn, ok := obj.(*types.Func); ok {
+			// A generic function instantiated with explicit type arguments,
+			// e.g. wire.Build(MakeBox[int]).
+			sig, ok := info.TypeOf(expr).(*types.Signature)
+			if !ok {
+				return nil, []error{notePosition(exprPos, errors.New("unknown pattern"))}
+			}
+			p, errs := processFuncProviderSignature(oc.fset, fn, sig)
+			if len(errs) > 0 {
+				return nil, notePositionAll(exprPos, errs)
+			}
+			p.InstanceArgs = typeListSlice(inst.TypeArgs)
+			return p, nil
+		}
+	}
 	if obj := qualifiedIdentObject(info, expr); obj != nil {
 		item, errs := oc.get(obj)
 		return item, mapErrors(errs, func(err error) error {
@@ -680,9 +701,61 @@ func qualifiedIdentObject(info *types.Info, expr ast.Expr) types.Object {
 	}
 }
 
+// instanceInfo reports whether expr is a generic instantiation with explicit
+// type arguments, returning the instantiation info and the instantiated
+// object. For a single type argument the syntax is *ast.IndexExpr; for two or
+// more it is *ast.IndexListExpr.
+func instanceInfo(info *types.Info, expr ast.Expr) (types.Instance, types.Object, bool) {
+	var id *ast.Ident
+	switch expr := expr.(type) {
+	case *ast.IndexExpr:
+		id, _ = expr.X.(*ast.Ident)
+		if id == nil {
+			if sel, ok := expr.X.(*ast.SelectorExpr); ok {
+				id = sel.Sel
+			}
+		}
+	case *ast.IndexListExpr:
+		id, _ = expr.X.(*ast.Ident)
+		if id == nil {
+			if sel, ok := expr.X.(*ast.SelectorExpr); ok {
+				id = sel.Sel
+			}
+		}
+	default:
+		return types.Instance{}, nil, false
+	}
+	if id == nil {
+		return types.Instance{}, nil, false
+	}
+	inst, ok := info.Instances[id]
+	if !ok {
+		return types.Instance{}, nil, false
+	}
+	return inst, info.ObjectOf(id), true
+}
+
+// typeListSlice converts a *types.TypeList into a slice of types, or nil.
+func typeListSlice(list *types.TypeList) []types.Type {
+	if list == nil || list.Len() == 0 {
+		return nil
+	}
+	out := make([]types.Type, list.Len())
+	for i := 0; i < list.Len(); i++ {
+		out[i] = list.At(i)
+	}
+	return out
+}
+
 // processFuncProvider creates a provider for a function declaration.
 func processFuncProvider(fset *token.FileSet, fn *types.Func) (*Provider, []error) {
-	sig := fn.Type().(*types.Signature)
+	return processFuncProviderSignature(fset, fn, fn.Type().(*types.Signature))
+}
+
+// processFuncProviderSignature creates a provider for a function declaration
+// using an explicit signature. This allows generic functions to be used as
+// providers through an instantiated signature.
+func processFuncProviderSignature(fset *token.FileSet, fn *types.Func, sig *types.Signature) (*Provider, []error) {
 	fpos := fn.Pos()
 	providerSig, err := funcOutput(sig)
 	if err != nil {
@@ -944,7 +1017,7 @@ func processValue(fset *token.FileSet, info *types.Info, call *ast.CallExpr) (*V
 	ok := true
 	ast.Inspect(call.Args[0], func(node ast.Node) bool {
 		switch expr := node.(type) {
-		case nil, *ast.ArrayType, *ast.BasicLit, *ast.BinaryExpr, *ast.ChanType, *ast.CompositeLit, *ast.FuncType, *ast.Ident, *ast.IndexExpr, *ast.InterfaceType, *ast.KeyValueExpr, *ast.MapType, *ast.ParenExpr, *ast.SelectorExpr, *ast.SliceExpr, *ast.StarExpr, *ast.StructType, *ast.TypeAssertExpr:
+		case nil, *ast.ArrayType, *ast.BasicLit, *ast.BinaryExpr, *ast.ChanType, *ast.CompositeLit, *ast.FuncType, *ast.Ident, *ast.IndexExpr, *ast.IndexListExpr, *ast.InterfaceType, *ast.KeyValueExpr, *ast.MapType, *ast.ParenExpr, *ast.SelectorExpr, *ast.SliceExpr, *ast.StarExpr, *ast.StructType, *ast.TypeAssertExpr:
 			// Good!
 		case *ast.UnaryExpr:
 			if expr.Op == token.ARROW {

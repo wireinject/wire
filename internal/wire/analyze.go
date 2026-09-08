@@ -69,6 +69,10 @@ type call struct {
 	// This will only be set if kind == structProvider.
 	fieldNames []string
 
+	// instanceArgs holds the explicit type arguments for a generic provider
+	// call, e.g. MakeBox[int]. It is nil for non-generic providers.
+	instanceArgs []types.Type
+
 	// ins is the list of types this call receives as arguments.
 	// This will be nil for kind == valueExpr.
 	ins []types.Type
@@ -196,16 +200,17 @@ dfs:
 				}
 			}
 			calls = append(calls, call{
-				kind:       kind,
-				pkg:        p.Pkg,
-				name:       p.Name,
-				args:       args,
-				varargs:    p.Varargs,
-				fieldNames: fieldNames,
-				ins:        ins,
-				out:        curr.t,
-				hasCleanup: p.HasCleanup,
-				hasErr:     p.HasErr,
+				kind:         kind,
+				pkg:          p.Pkg,
+				name:         p.Name,
+				args:         args,
+				varargs:      p.Varargs,
+				fieldNames:   fieldNames,
+				ins:          ins,
+				out:          curr.t,
+				hasCleanup:   p.HasCleanup,
+				hasErr:       p.HasErr,
+				instanceArgs: p.InstanceArgs,
 			})
 		case pv.IsValue():
 			v := pv.Value()

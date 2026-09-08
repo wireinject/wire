@@ -554,7 +554,7 @@ func (test *testCase) materialize(gopath string) error {
 	const importPath = "example.com"
 	const depPath = "github.com/google/wire"
 	depLoc := filepath.Join(gopath, "src", filepath.FromSlash(depPath))
-	example := fmt.Sprintf("module %s\n\nrequire %s v0.1.0\nreplace %s => %s\n", importPath, depPath, depPath, depLoc)
+	example := fmt.Sprintf("module %s\n\ngo 1.19\n\nrequire %s v0.1.0\nreplace %s => %s\n", importPath, depPath, depPath, depLoc)
 	gomod := filepath.Join(gopath, "src", filepath.FromSlash(importPath), "go.mod")
 	if err := ioutil.WriteFile(gomod, []byte(example), 0666); err != nil {
 		return fmt.Errorf("generate go.mod for %s: %v", gomod, err)

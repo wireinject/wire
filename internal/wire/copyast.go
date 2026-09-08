@@ -206,9 +206,10 @@ func copyAST(original ast.Node) ast.Node {
 			}
 		case *ast.FuncType:
 			m[node] = &ast.FuncType{
-				Func:    node.Func,
-				Params:  fieldListFromMap(m, node.Params),
-				Results: fieldListFromMap(m, node.Results),
+				Func:       node.Func,
+				TypeParams: fieldListFromMap(m, node.TypeParams),
+				Params:     fieldListFromMap(m, node.Params),
+				Results:    fieldListFromMap(m, node.Results),
 			}
 		case *ast.GenDecl:
 			decl := &ast.GenDecl{
@@ -262,6 +263,13 @@ func copyAST(original ast.Node) ast.Node {
 				Lbrack: node.Lbrack,
 				Index:  exprFromMap(m, node.Index),
 				Rbrack: node.Rbrack,
+			}
+		case *ast.IndexListExpr:
+			m[node] = &ast.IndexListExpr{
+				X:       exprFromMap(m, node.X),
+				Lbrack:  node.Lbrack,
+				Indices: copyExprList(m, node.Indices),
+				Rbrack:  node.Rbrack,
 			}
 		case *ast.InterfaceType:
 			m[node] = &ast.InterfaceType{
@@ -361,11 +369,12 @@ func copyAST(original ast.Node) ast.Node {
 			}
 		case *ast.TypeSpec:
 			m[node] = &ast.TypeSpec{
-				Doc:     commentGroupFromMap(m, node.Doc),
-				Name:    identFromMap(m, node.Name),
-				Assign:  node.Assign,
-				Type:    exprFromMap(m, node.Type),
-				Comment: commentGroupFromMap(m, node.Comment),
+				Doc:        commentGroupFromMap(m, node.Doc),
+				Name:       identFromMap(m, node.Name),
+				TypeParams: fieldListFromMap(m, node.TypeParams),
+				Assign:     node.Assign,
+				Type:       exprFromMap(m, node.Type),
+				Comment:    commentGroupFromMap(m, node.Comment),
 			}
 		case *ast.TypeSwitchStmt:
 			m[node] = &ast.TypeSwitchStmt{

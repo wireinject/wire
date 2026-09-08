@@ -136,6 +136,23 @@ func detectOutputDir(paths []string) (string, error) {
 
 // generateInjectors generates the injectors for a given package.
 func generateInjectors(g *gen, pkg *packages.Package) (injectorFiles []*ast.File, _ []error) {
+	// Imports are shared by every injector in the generated file. Reserve
+	// all injector type parameter names before any import is assigned a name.
+	for _, f := range pkg.Syntax {
+		for _, decl := range f.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Type.TypeParams == nil {
+				continue
+			}
+			if call, _ := findInjectorBuild(pkg.TypesInfo, fn); call != nil {
+				for _, field := range fn.Type.TypeParams.List {
+					for _, name := range field.Names {
+						g.importAvoid[name.Name] = true
+					}
+				}
+			}
+		}
+	}
 	oc := newObjectCache([]*packages.Package{pkg})
 	injectorFiles = make([]*ast.File, 0, len(pkg.Syntax))
 	ec := new(errorCollector)
@@ -245,6 +262,7 @@ type gen struct {
 	buf         bytes.Buffer
 	imports     map[string]importInfo
 	anonImports map[string]bool
+	importAvoid map[string]bool // Injector type parameters that would shadow imports.
 	values      map[ast.Expr]string
 }
 
@@ -252,6 +270,7 @@ func newGen(pkg *packages.Package) *gen {
 	return &gen{
 		pkg:         pkg,
 		anonImports: make(map[string]bool),
+		importAvoid: make(map[string]bool),
 		imports:     make(map[string]importInfo),
 		values:      make(map[ast.Expr]string),
 	}
@@ -365,6 +384,7 @@ func (g *gen) inject(pos token.Pos, name string, sig *types.Signature, set *Prov
 				})
 			}
 		}
+
 	}
 	if len(ec.errors) > 0 {
 		return ec.errors
@@ -373,12 +393,10 @@ func (g *gen) inject(pos token.Pos, name string, sig *types.Signature, set *Prov
 	// Perform one pass to collect all imports, followed by the real pass.
 	injectPass(name, sig, calls, set, doc, &injectorGen{
 		g:       g,
-		errVar:  disambiguate("err", g.nameInFileScope),
 		discard: true,
 	})
 	injectPass(name, sig, calls, set, doc, &injectorGen{
 		g:       g,
-		errVar:  disambiguate("err", g.nameInFileScope),
 		discard: false,
 	})
 	if len(pendingVars) > 0 {
@@ -535,7 +553,7 @@ func (g *gen) qualifyImport(name, path string) string {
 	// TODO(light): Use parts of import path to disambiguate.
 	newName := disambiguate(name, func(n string) bool {
 		// Don't let an import take the "err" name. That's annoying.
-		return n == "err" || g.nameInFileScope(n)
+		return n == "err" || g.importAvoid[n] || g.nameInFileScope(n)
 	})
 	g.imports[unvendored] = importInfo{
 		name:    newName,
@@ -574,6 +592,7 @@ type injectorGen struct {
 	paramNames   []string
 	localNames   []string
 	cleanupNames []string
+	typeParams   *types.TypeParamList
 	errVar       string
 
 	// discard causes ig.p and ig.writeAST to no-op. Useful to run
@@ -584,6 +603,8 @@ type injectorGen struct {
 // injectPass generates an injector given the output from analysis.
 // The sig passed in should be verified.
 func injectPass(name string, sig *types.Signature, calls []call, set *ProviderSet, doc *ast.CommentGroup, ig *injectorGen) {
+	ig.typeParams = sig.TypeParams()
+	ig.errVar = disambiguate("err", ig.nameInInjector)
 	params := sig.Params()
 	injectSig, err := funcOutput(sig)
 	if err != nil {
@@ -595,7 +616,19 @@ func injectPass(name string, sig *types.Signature, calls []call, set *ProviderSe
 			ig.p("%s\n", c.Text)
 		}
 	}
-	ig.p("func %s(", name)
+	ig.p("func %s", name)
+	if tps := sig.TypeParams(); tps != nil && tps.Len() > 0 {
+		ig.p("[")
+		for i := 0; i < tps.Len(); i++ {
+			if i > 0 {
+				ig.p(", ")
+			}
+			tp := tps.At(i)
+			ig.p("%s %s", tp.Obj().Name(), types.TypeString(tp.Constraint(), ig.g.qualifyPkg))
+		}
+		ig.p("]")
+	}
+	ig.p("(")
 	for i := 0; i < params.Len(); i++ {
 		if i > 0 {
 			ig.p(", ")
@@ -674,7 +707,18 @@ func (ig *injectorGen) funcProviderCall(lname string, c *call, injectSig outputS
 		ig.p(", %s", ig.errVar)
 	}
 	ig.p(" := ")
-	ig.p("%s(", ig.g.qualifiedID(c.pkg.Name(), c.pkg.Path(), c.name))
+	ig.p("%s", ig.g.qualifiedID(c.pkg.Name(), c.pkg.Path(), c.name))
+	if len(c.instanceArgs) > 0 {
+		ig.p("[")
+		for i, t := range c.instanceArgs {
+			if i > 0 {
+				ig.p(", ")
+			}
+			ig.p("%s", types.TypeString(t, ig.g.qualifyPkg))
+		}
+		ig.p("]")
+	}
+	ig.p("(")
 	for i, a := range c.args {
 		if i > 0 {
 			ig.p(", ")
@@ -694,7 +738,15 @@ func (ig *injectorGen) funcProviderCall(lname string, c *call, injectSig outputS
 		for i := prevCleanup - 1; i >= 0; i-- {
 			ig.p("\t\t%s()\n", ig.cleanupNames[i])
 		}
-		ig.p("\t\treturn %s", zeroValue(injectSig.out, ig.g.qualifyPkg))
+		if ig.typeParams != nil && ig.typeParams.Len() > 0 {
+			// A type parameter may represent a non-nilable type. A variable
+			// declaration also works when the builtin new is shadowed.
+			zero := disambiguate("zero", ig.nameInInjector)
+			ig.p("\t\tvar %s %s\n", zero, types.TypeString(injectSig.out, ig.g.qualifyPkg))
+			ig.p("\t\treturn %s", zero)
+		} else {
+			ig.p("\t\treturn %s", zeroValue(injectSig.out, ig.g.qualifyPkg))
+		}
 		if injectSig.cleanup {
 			ig.p(", nil")
 		}
@@ -743,6 +795,11 @@ func (ig *injectorGen) fieldExpr(lname string, c *call) {
 // nameInInjector reports whether name collides with any other identifier
 // in the current injector.
 func (ig *injectorGen) nameInInjector(name string) bool {
+	for i := 0; i < ig.typeParams.Len(); i++ {
+		if ig.typeParams.At(i).Obj().Name() == name {
+			return true
+		}
+	}
 	if name == ig.errVar {
 		return true
 	}
