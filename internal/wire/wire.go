@@ -793,6 +793,8 @@ func zeroValue(t types.Type, qf types.Qualifier) string {
 			return "0"
 		case info&types.IsString != 0:
 			return `""`
+		case u.Kind() == types.UnsafePointer:
+			return "nil"
 		default:
 			panic("unreachable")
 		}
