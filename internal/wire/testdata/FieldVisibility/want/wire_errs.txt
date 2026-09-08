@@ -1,0 +1,11 @@
+example.com/foo/wire.go:x:y: inject injectStar: field private of example.com/other.S is unexported and cannot be used from another package
+
+example.com/foo/wire.go:x:y: inject injectAlias: field private of example.com/other.S is unexported and cannot be used from another package
+
+example.com/foo/wire.go:x:y: inject injectField: field private is unexported and cannot be used from another package
+
+example.com/foo/wire.go:x:y: inject injectSet: field private of example.com/other.S is unexported and cannot be used from another package
+
+example.com/foo/wire.go:x:y: inject injectFieldSet: field private is unexported and cannot be used from another package
+
+example.com/foo/wire.go:x:y: inject injectEmbedded: field inner of example.com/other.Embedded is unexported and cannot be used from another package

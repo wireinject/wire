@@ -1,0 +1,1 @@
+example.com/foo/foo.go:x:y: inject injectS: field priv of example.com/other.S is unexported and cannot be used from another package

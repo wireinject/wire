@@ -384,7 +384,42 @@ func (g *gen) inject(pos token.Pos, name string, sig *types.Signature, set *Prov
 				})
 			}
 		}
-
+		// Sets may be declared in another package. Check accessibility where
+		// their calls will be emitted, using each field's declaring package
+		// (which may differ from the package declaring a type alias).
+		switch c.kind {
+		case funcProviderCall, structProvider:
+			if c.pkg != nil && c.pkg.Path() != g.pkg.PkgPath && !ast.IsExported(c.name) {
+				ec.add(notePosition(g.pkg.Fset.Position(pos),
+					fmt.Errorf("inject %s: provider %s.%s is unexported and cannot be used from another package", name, c.pkg.Path(), c.name)))
+			}
+		case selectorExpr:
+			if c.pkg != nil && c.pkg.Path() != g.pkg.PkgPath && !ast.IsExported(c.name) {
+				ec.add(notePosition(g.pkg.Fset.Position(pos),
+					fmt.Errorf("inject %s: field %s is unexported and cannot be used from another package", name, c.name)))
+			}
+		}
+		if c.kind == structProvider {
+			t := c.out
+			if ptr, ok := t.Underlying().(*types.Pointer); ok {
+				t = ptr.Elem()
+			}
+			st := t.Underlying().(*types.Struct)
+			for _, fieldName := range c.fieldNames {
+				for j := 0; j < st.NumFields(); j++ {
+					f := st.Field(j)
+					if f.Name() == fieldName && !f.Exported() && f.Pkg() != nil && f.Pkg().Path() != g.pkg.PkgPath {
+						ec.add(notePosition(g.pkg.Fset.Position(pos),
+							fmt.Errorf("inject %s: field %s of %s is unexported and cannot be used from another package", name, fieldName, types.TypeString(c.out, nil))))
+					}
+				}
+			}
+		}
+		for _, arg := range c.instanceArgs {
+			if err := accessibleType(arg, g.pkg.PkgPath); err != nil {
+				ec.add(notePosition(g.pkg.Fset.Position(pos), fmt.Errorf("inject %s: %v", name, err)))
+			}
+		}
 	}
 	if len(ec.errors) > 0 {
 		return ec.errors
@@ -983,6 +1018,69 @@ func disambiguate(name string, collides func(string) bool) string {
 			return sbuf
 		}
 	}
+}
+
+// accessibleType checks the type names that an explicit type argument emits.
+// Named types and aliases are opaque; their underlying fields need not be public.
+func accessibleType(t types.Type, wantPkg string) error {
+	if named, ok := t.(interface{ Obj() *types.TypeName }); ok {
+		obj := named.Obj()
+		if obj.Pkg() != nil && obj.Pkg().Path() != wantPkg && !obj.Exported() {
+			return fmt.Errorf("type %s is unexported and cannot be used from another package", types.TypeString(t, nil))
+		}
+		if instance, ok := t.(interface{ TypeArgs() *types.TypeList }); ok {
+			for i := 0; i < instance.TypeArgs().Len(); i++ {
+				if err := accessibleType(instance.TypeArgs().At(i), wantPkg); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	var children []types.Type
+	switch t := t.(type) {
+	case *types.Pointer:
+		children = append(children, t.Elem())
+	case *types.Slice:
+		children = append(children, t.Elem())
+	case *types.Array:
+		children = append(children, t.Elem())
+	case *types.Chan:
+		children = append(children, t.Elem())
+	case *types.Map:
+		children = append(children, t.Key(), t.Elem())
+	case *types.Signature:
+		for _, tuple := range []*types.Tuple{t.Params(), t.Results()} {
+			for i := 0; i < tuple.Len(); i++ {
+				children = append(children, tuple.At(i).Type())
+			}
+		}
+	case *types.Struct:
+		for i := 0; i < t.NumFields(); i++ {
+			f := t.Field(i)
+			if f.Pkg() != nil && f.Pkg().Path() != wantPkg && !f.Exported() {
+				return fmt.Errorf("field %s is unexported and cannot be used from another package", f.Name())
+			}
+			children = append(children, f.Type())
+		}
+	case *types.Interface:
+		for i := 0; i < t.NumExplicitMethods(); i++ {
+			m := t.ExplicitMethod(i)
+			if m.Pkg() != nil && m.Pkg().Path() != wantPkg && !m.Exported() {
+				return fmt.Errorf("method %s is unexported and cannot be used from another package", m.Name())
+			}
+			children = append(children, m.Type())
+		}
+		for i := 0; i < t.NumEmbeddeds(); i++ {
+			children = append(children, t.EmbeddedType(i))
+		}
+	}
+	for _, child := range children {
+		if err := accessibleType(child, wantPkg); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // accessibleFrom reports whether node can be copied to wantPkg without

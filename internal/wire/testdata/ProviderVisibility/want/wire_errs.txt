@@ -1,0 +1,9 @@
+example.com/foo/wire.go:x:y: inject injectFunc: provider example.com/other.private is unexported and cannot be used from another package
+
+example.com/foo/wire.go:x:y: inject injectStruct: provider example.com/other.hidden is unexported and cannot be used from another package
+
+example.com/foo/wire.go:x:y: inject injectTypeArgument: type example.com/other.hidden is unexported and cannot be used from another package
+
+example.com/foo/wire.go:x:y: inject injectAnonymousField: field private is unexported and cannot be used from another package
+
+example.com/foo/wire.go:x:y: inject injectAnonymousMethod: method private is unexported and cannot be used from another package
