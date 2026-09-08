@@ -887,7 +887,7 @@ func processStructProvider(fset *token.FileSet, info *types.Info, call *ast.Call
 	}
 	const firstArgReqFormat = "first argument to Struct must be a pointer to a named struct; found %s"
 	structType := info.TypeOf(call.Args[0])
-	structPtr, ok := structType.(*types.Pointer)
+	structPtr, ok := structType.Underlying().(*types.Pointer)
 	if !ok {
 		return nil, notePosition(fset.Position(call.Pos()),
 			fmt.Errorf(firstArgReqFormat, types.TypeString(structType, nil)))
@@ -899,8 +899,33 @@ func processStructProvider(fset *token.FileSet, info *types.Info, call *ast.Call
 			fmt.Errorf(firstArgReqFormat, types.TypeString(structPtr, nil)))
 	}
 
-	stExpr := call.Args[0].(*ast.CallExpr)
-	typeName := qualifiedIdentObject(info, stExpr.Args[0]) // should be either an identifier or selector
+	// Prefer the spelling in new(T): older Go versions erase aliases from
+	// type information, including aliases of anonymous structs.
+	var typeName *types.TypeName
+	var typeArgs []types.Type
+	if arg, ok := astutil.Unparen(call.Args[0]).(*ast.CallExpr); ok && len(arg.Args) == 1 {
+		if fn, ok := qualifiedIdentObject(info, arg.Fun).(*types.Builtin); ok && fn.Name() == "new" {
+			expr := astutil.Unparen(arg.Args[0])
+			typeName, _ = qualifiedIdentObject(info, expr).(*types.TypeName)
+			if inst, obj, ok := instanceInfo(info, expr); ok {
+				typeName, _ = obj.(*types.TypeName)
+				typeArgs = typeListSlice(inst.TypeArgs)
+			}
+		}
+	}
+	if typeName == nil {
+		if named, ok := structPtr.Elem().(interface{ Obj() *types.TypeName }); ok {
+			typeName = named.Obj()
+		}
+		// TypeArgs is optional: Go 1.22 aliases do not implement it.
+		if instance, ok := structPtr.Elem().(interface{ TypeArgs() *types.TypeList }); ok {
+			typeArgs = typeListSlice(instance.TypeArgs())
+		}
+	}
+	if typeName == nil {
+		return nil, notePosition(fset.Position(call.Pos()),
+			fmt.Errorf(firstArgReqFormat, types.TypeString(structPtr, nil)))
+	}
 	provider := &Provider{
 		Pkg:      typeName.Pkg(),
 		Name:     typeName.Name(),
@@ -908,6 +933,7 @@ func processStructProvider(fset *token.FileSet, info *types.Info, call *ast.Call
 		IsStruct: true,
 		Out:      []types.Type{structPtr.Elem(), structPtr},
 	}
+	provider.InstanceArgs = typeArgs
 	if allFields(call) {
 		for i := 0; i < st.NumFields(); i++ {
 			if isPrevented(st.Tag(i)) {

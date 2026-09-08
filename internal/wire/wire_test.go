@@ -564,3 +564,65 @@ func (test *testCase) materialize(gopath string) error {
 	}
 	return nil
 }
+
+// Pointer aliases have different go/types representations across Go releases.
+// Check the compiled program rather than fixing one representation in a golden.
+func TestWirePointerAliases(t *testing.T) {
+	marker, err := os.ReadFile(filepath.Join("..", "..", "wire.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	test := &testCase{
+		pkg: "example.com/foo",
+		goFiles: map[string][]byte{
+			"github.com/google/wire/wire.go": marker,
+			"example.com/foo/foo.go": []byte(`//go:build wireinject
+
+package main
+
+import (
+	"fmt"
+	"github.com/google/wire"
+)
+
+type S struct { N int }
+type Pointer = *S
+var marker Pointer
+
+func injectPointer() Pointer {
+	wire.Build(wire.Value(7), wire.Struct(new(S), "*"))
+	return nil
+}
+func injectMarker() S {
+	wire.Build(wire.Value(9), wire.Struct(marker, "*"))
+	return S{}
+}
+func main() {
+	if injectPointer().N != 7 || injectMarker().N != 9 {
+		panic("incorrect pointer alias injection")
+	}
+	fmt.Println("ok")
+}
+`),
+		},
+		wantProgramOutput: []byte("ok\n"),
+	}
+	gopath := t.TempDir()
+	if err := test.materialize(gopath); err != nil {
+		t.Fatal(err)
+	}
+	gens, errs := Generate(context.Background(), filepath.Join(gopath, "src", "example.com"),
+		append(os.Environ(), "GOPATH="+gopath), []string{test.pkg}, nil)
+	if len(errs) != 0 || len(gens) != 1 {
+		t.Fatalf("Generate: %d results, errors: %v", len(gens), errs)
+	}
+	if len(gens[0].Errs) != 0 {
+		t.Fatal(gens[0].Errs)
+	}
+	if err := gens[0].Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := goBuildCheck(filepath.Join(build.Default.GOROOT, "bin", "go"), gopath, test); err != nil {
+		t.Fatal(err)
+	}
+}

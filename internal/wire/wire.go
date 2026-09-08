@@ -759,10 +759,21 @@ func (ig *injectorGen) funcProviderCall(lname string, c *call, injectSig outputS
 func (ig *injectorGen) structProviderCall(lname string, c *call) {
 	ig.p("\t%s", lname)
 	ig.p(" := ")
-	if _, ok := c.out.(*types.Pointer); ok {
+	if _, ok := c.out.Underlying().(*types.Pointer); ok {
 		ig.p("&")
 	}
-	ig.p("%s{\n", ig.g.qualifiedID(c.pkg.Name(), c.pkg.Path(), c.name))
+	ig.p("%s", ig.g.qualifiedID(c.pkg.Name(), c.pkg.Path(), c.name))
+	if len(c.instanceArgs) > 0 {
+		ig.p("[")
+		for i, t := range c.instanceArgs {
+			if i > 0 {
+				ig.p(", ")
+			}
+			ig.p("%s", types.TypeString(t, ig.g.qualifyPkg))
+		}
+		ig.p("]")
+	}
+	ig.p("{\n")
 	for i, a := range c.args {
 		ig.p("\t\t%s: ", c.fieldNames[i])
 		if a < len(ig.paramNames) {
