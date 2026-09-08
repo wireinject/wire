@@ -706,7 +706,7 @@ func (ig *injectorGen) funcProviderCall(lname string, c *call, injectSig outputS
 			ig.p(", nil")
 		}
 		// TODO(light): Give information about failing provider.
-		ig.p(", err\n")
+		ig.p(", %s\n", ig.errVar)
 		ig.p("\t}\n")
 	}
 }
