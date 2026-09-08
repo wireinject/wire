@@ -355,6 +355,10 @@ func isIdent(s string) bool {
 // "C:\GOPATH" and running on Windows, the string
 // "C:\GOPATH\src\foo\bar.go:15:4" would be rewritten to "foo/bar.go:x:y".
 func scrubError(gopath string, s string) string {
+	// Go versions differ on the optional "name" prefix in this diagnostic.
+	if strings.Contains(s, " not exported by package ") {
+		s = strings.ReplaceAll(s, ": name ", ": ")
+	}
 	sb := new(strings.Builder)
 	query := gopath + string(os.PathSeparator) + "src" + string(os.PathSeparator)
 	for {
