@@ -12,7 +12,11 @@ func injectBar() (*Bar, func()) {
 	foo, cleanup := provideFoo()
 	bar, cleanup2 := provideBar(foo)
 	return bar, func() {
-		cleanup2()
-		cleanup()
+		if cleanup2 != nil {
+			cleanup2()
+		}
+		if cleanup != nil {
+			cleanup()
+		}
 	}
 }

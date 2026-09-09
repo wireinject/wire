@@ -74,7 +74,9 @@ func injectNew[T any]() (T, error) {
 func injectCleanup[cleanup any]() (*cleanup, func()) {
 	v, cleanup2 := resource[cleanup]()
 	return v, func() {
-		cleanup2()
+		if cleanup2 != nil {
+			cleanup2()
+		}
 	}
 }
 

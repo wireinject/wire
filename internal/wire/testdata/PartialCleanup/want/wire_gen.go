@@ -12,17 +12,27 @@ func injectBaz() (Baz, func(), error) {
 	foo, cleanup := provideFoo()
 	bar, cleanup2, err := provideBar(foo)
 	if err != nil {
-		cleanup()
+		if cleanup != nil {
+			cleanup()
+		}
 		return 0, nil, err
 	}
 	baz, err := provideBaz(bar)
 	if err != nil {
-		cleanup2()
-		cleanup()
+		if cleanup2 != nil {
+			cleanup2()
+		}
+		if cleanup != nil {
+			cleanup()
+		}
 		return 0, nil, err
 	}
 	return baz, func() {
-		cleanup2()
-		cleanup()
+		if cleanup2 != nil {
+			cleanup2()
+		}
+		if cleanup != nil {
+			cleanup()
+		}
 	}, nil
 }

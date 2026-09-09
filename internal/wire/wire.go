@@ -720,7 +720,9 @@ func injectPass(name string, sig *types.Signature, calls []call, set *ProviderSe
 	if injectSig.cleanup {
 		ig.p(", func() {\n")
 		for i := len(ig.cleanupNames) - 1; i >= 0; i-- {
-			ig.p("\t\t%s()\n", ig.cleanupNames[i])
+			ig.p("\t\tif %s != nil {\n", ig.cleanupNames[i])
+			ig.p("\t\t\t%s()\n", ig.cleanupNames[i])
+			ig.p("\t\t}\n")
 		}
 		ig.p("\t}")
 	}
@@ -771,7 +773,9 @@ func (ig *injectorGen) funcProviderCall(lname string, c *call, injectSig outputS
 	if c.hasErr {
 		ig.p("\tif %s != nil {\n", ig.errVar)
 		for i := prevCleanup - 1; i >= 0; i-- {
-			ig.p("\t\t%s()\n", ig.cleanupNames[i])
+			ig.p("\t\tif %s != nil {\n", ig.cleanupNames[i])
+			ig.p("\t\t\t%s()\n", ig.cleanupNames[i])
+			ig.p("\t\t}\n")
 		}
 		if ig.typeParams != nil && ig.typeParams.Len() > 0 {
 			// A type parameter may represent a non-nilable type. A variable

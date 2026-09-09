@@ -34,8 +34,9 @@ fi
 
 echo
 echo "Ensuring .go files are formatted with gofmt -s..."
-mapfile -t go_files < <(find . -name '*.go' -type f | grep -v testdata)
-DIFF="$(gofmt -s -d "${go_files[@]}")"
+# Avoid bash-only mapfile/process substitution so `sh ./internal/runtests.sh`
+# works on macOS /bin/sh (bash 3.2 in POSIX mode).
+DIFF="$(find . -name '*.go' -type f | grep -v testdata | xargs gofmt -s -d)"
 if [ -n "$DIFF" ]; then
   echo "FAIL: please run gofmt -s and commit the result"
   echo "$DIFF";

@@ -187,9 +187,12 @@ func goBuildCheck(goToolPath, gopath string, test *testCase) error {
 	}
 
 	// Run the resulting program and compare its output to the expected
-	// output.
+	// output. Surface stderr on failure so panics are visible.
 	out, err := exec.Command(testExePath).Output()
 	if err != nil {
+		if ee, ok := err.(*exec.ExitError); ok && len(ee.Stderr) > 0 {
+			return fmt.Errorf("run compiled program: %v\n%s", err, ee.Stderr)
+		}
 		return fmt.Errorf("run compiled program: %v", err)
 	}
 	if !bytes.Equal(out, test.wantProgramOutput) {
@@ -569,6 +572,128 @@ func (test *testCase) materialize(gopath string) error {
 		return fmt.Errorf("generate go.mod for %s: %v", depPath, err)
 	}
 	return nil
+}
+
+// TestWireNilCleanup compiles and runs generated injectors that mix nil and
+// non-nil provider cleanups. Golden snapshots cannot catch a nil func panic.
+func TestWireNilCleanup(t *testing.T) {
+	marker, err := os.ReadFile(filepath.Join("..", "..", "wire.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const source = `//go:build wireinject
+
+package main
+
+import (
+	"errors"
+	"fmt"
+	"github.com/google/wire"
+)
+
+const fail = %t
+const allNil = %t
+
+var cleaned []string
+var providerErr = errors.New("provider failed")
+
+type A struct{}
+type B struct{}
+type C struct{}
+type Result struct{ Ready bool }
+
+func cleanupFor(name string) func() {
+	if allNil {
+		return nil
+	}
+	return func() { cleaned = append(cleaned, name) }
+}
+
+func provideA() (A, func()) { return A{}, cleanupFor("A") }
+func provideB(A) (B, func()) { return B{}, nil }
+func provideC(B) (C, func()) { return C{}, cleanupFor("C") }
+func provideResult(C) (Result, func(), error) {
+	if fail {
+		return Result{Ready: true}, func() { panic("failed provider cleanup called") }, providerErr
+	}
+	return Result{Ready: true}, nil, nil
+}
+
+func inject() (Result, func(), error) {
+	wire.Build(provideA, provideB, provideC, provideResult)
+	return Result{}, nil, nil
+}
+
+func main() {
+	result, cleanup, err := inject()
+	if fail {
+		// Identity: the injector must return the provider error, not a wrapper.
+		if err != providerErr {
+			panic("error is not the provider error")
+		}
+		if result != (Result{}) {
+			panic("result is not the zero value")
+		}
+		if cleanup != nil {
+			panic("aggregate cleanup is non-nil")
+		}
+	} else {
+		if err != nil {
+			panic("success path returned an error")
+		}
+		if !result.Ready {
+			panic("result not ready")
+		}
+		if cleanup == nil {
+			panic("aggregate cleanup is nil")
+		}
+		if len(cleaned) != 0 {
+			panic("providers cleaned before the aggregate cleanup ran")
+		}
+		cleanup()
+	}
+	fmt.Println(cleaned)
+}
+`
+	for _, tc := range []struct {
+		name   string
+		fail   bool
+		allNil bool
+		want   string
+	}{
+		{name: "success", want: "[C A]\n"},
+		{name: "error", fail: true, want: "[C A]\n"},
+		{name: "all_nil", allNil: true, want: "[]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			test := &testCase{
+				pkg: "example.com/foo",
+				goFiles: map[string][]byte{
+					"github.com/google/wire/wire.go": marker,
+					"example.com/foo/foo.go":         []byte(fmt.Sprintf(source, tc.fail, tc.allNil)),
+				},
+				wantProgramOutput: []byte(tc.want),
+			}
+			gopath := t.TempDir()
+			if err := test.materialize(gopath); err != nil {
+				t.Fatal(err)
+			}
+			gens, errs := Generate(context.Background(), filepath.Join(gopath, "src", "example.com"),
+				append(os.Environ(), "GOPATH="+gopath), []string{test.pkg}, nil)
+			if len(errs) != 0 || len(gens) != 1 {
+				t.Fatalf("Generate: %d results, errors: %v", len(gens), errs)
+			}
+			if len(gens[0].Errs) != 0 {
+				t.Fatal(gens[0].Errs)
+			}
+			if err := gens[0].Commit(); err != nil {
+				t.Fatal(err)
+			}
+			if err := goBuildCheck(filepath.Join(build.Default.GOROOT, "bin", "go"), gopath, test); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
 }
 
 // Pointer aliases have different go/types representations across Go releases.
