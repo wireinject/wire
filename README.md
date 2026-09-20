@@ -1,12 +1,14 @@
 # Wire: Automated Initialization in Go
 
-[![Build Status](https://github.com/google/wire/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/google/wire/actions)
+[![Build Status](https://github.com/wireinject/wire/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/wireinject/wire/actions)
 [![godoc](https://godoc.org/github.com/google/wire?status.svg)][godoc]
 
 > [!WARNING]
-> This origin project is no longer maintained.
+> The original `google/wire` project is no longer maintained. It was archived again
+> on August 25, 2025 after a brief unarchiving period, and it is now completely
+> unmaintained.
 >
-> This is a version maintained by wireinject/wire.
+> This is a version maintained by [wireinject/wire](https://github.com/wireinject/wire).
 
 Wire is a code generation tool that automates connecting components using
 [dependency injection][]. Dependencies between components are represented in
@@ -52,12 +54,23 @@ As of version v0.3.0, Wire is *beta* and is considered feature complete. It
 works well for the tasks it was designed to perform, and we prefer to keep it
 as simple as possible.
 
-We'll not be accepting new features at this time, but will gladly accept bug
-reports and fixes.
+Maintenance is now handled by [wireinject/wire](https://github.com/wireinject/wire),
+with a deliberately narrow scope:
+
+- We fix bugs, including compatibility problems with new Go toolchains and their
+  dependencies.
+- We add small, scoped features when they are clearly useful and low-risk.
+- We do not overhaul the project. The core design, public API, and command-line
+  interface stay compatible with `google/wire`.
+- We do not modify the golden tests that pin the generated output. The code `wire`
+  produces for existing projects keeps working exactly as before.
+
+Stability comes first: every change is weighed against the risk it poses to
+existing users.
 
 ## Community
 
-For questions, please use [GitHub Discussions](https://github.com/google/wire/discussions).
+For questions, please use [GitHub Discussions](https://github.com/wireinject/wire/discussions).
 
 This project is covered by the Go [Code of Conduct][].
 
