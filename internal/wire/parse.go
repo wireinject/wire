@@ -337,6 +337,8 @@ func Load(ctx context.Context, wd string, env []string, tags string, patterns []
 				info.Injectors = append(info.Injectors, &Injector{
 					ImportPath: pkg.PkgPath,
 					FuncName:   fn.Name.Name,
+					Set:        set,
+					Out:        out.out,
 				})
 			}
 		}
@@ -413,6 +415,10 @@ func (id ProviderSetID) String() string {
 type Injector struct {
 	ImportPath string
 	FuncName   string
+	// Set is the provider set built from the injector's wire.Build call.
+	Set *ProviderSet
+	// Out is the type the injector returns.
+	Out types.Type
 }
 
 // String returns the injector name as ""path/to/pkg".Foo".

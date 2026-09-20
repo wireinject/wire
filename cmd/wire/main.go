@@ -44,6 +44,7 @@ func main() {
 	subcommands.Register(&checkCmd{}, "")
 	subcommands.Register(&diffCmd{}, "")
 	subcommands.Register(&genCmd{}, "")
+	subcommands.Register(&graphCmd{}, "")
 	subcommands.Register(&showCmd{}, "")
 	flag.Parse()
 
@@ -63,6 +64,7 @@ func main() {
 		"check":    true,
 		"diff":     true,
 		"gen":      true,
+		"graph":    true,
 		"show":     true,
 	}
 	// Default to running the "gen" command.

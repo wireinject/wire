@@ -36,11 +36,13 @@ and ensuring that `$GOPATH/bin` is added to your `$PATH`.
 
 - [Tutorial][]
 - [User Guide][]
+- [Command Line Reference][]
 - [Best Practices][]
 - [FAQ][]
 
 [Tutorial]: ./_tutorial/README.md
 [Best Practices]: ./docs/best-practices.md
+[Command Line Reference]: ./docs/cli.md
 [FAQ]: ./docs/faq.md
 [User Guide]: ./docs/guide.md
 

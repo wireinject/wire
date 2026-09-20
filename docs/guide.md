@@ -177,7 +177,12 @@ written code is just normal Go code, and can be used without Wire.
 
 Once `wire_gen.go` is created, you can regenerate it by running [`go generate`].
 
+Generating injectors is only one of the things the `wire` binary does: it can
+also check your wiring, describe your provider sets and draw the dependency
+graph as a diagram. See the [Command Line Reference][] for all the commands.
+
 [`go generate`]: https://blog.golang.org/generate
+[Command Line Reference]: ./cli.md
 
 ## Advanced Features
 
